@@ -39,10 +39,12 @@ class TrackerConfig:
     default_project: str = ""
     default_task_label: str = ""
 
-    # Pricing auto-refresh
+    # Pricing auto-refresh & model discovery
     pricing_url: str = "https://raw.githubusercontent.com/prameshanu/claude-token-tracker/main/pricing.json"
     pricing_cache_path: str = "~/.claude_token_tracker/pricing_cache.json"
     pricing_refresh_days: int = 7
+    auto_discover_models: bool = True
+    anthropic_api_key: str = ""  # used for model discovery; auto-set by TrackedAnthropic
 
     # Email alerts (for pricing fetch failures)
     alert_email: str = ""
@@ -76,6 +78,8 @@ class TrackerConfig:
             pricing_url=os.getenv("CLAUDE_TRACKER_PRICING_URL", "https://raw.githubusercontent.com/prameshanu/claude-token-tracker/main/pricing.json"),
             pricing_cache_path=os.getenv("CLAUDE_TRACKER_PRICING_CACHE_PATH", "~/.claude_token_tracker/pricing_cache.json"),
             pricing_refresh_days=int(os.getenv("CLAUDE_TRACKER_PRICING_REFRESH_DAYS", "7")),
+            auto_discover_models=os.getenv("CLAUDE_TRACKER_AUTO_DISCOVER_MODELS", "true").lower() == "true",
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
             alert_email=os.getenv("CLAUDE_TRACKER_ALERT_EMAIL", ""),
             smtp_host=os.getenv("CLAUDE_TRACKER_SMTP_HOST", "smtp.gmail.com"),
             smtp_port=int(os.getenv("CLAUDE_TRACKER_SMTP_PORT", "587")),

@@ -28,6 +28,9 @@ class TrackedAnthropic:
     ) -> None:
         self._inner = anthropic.Anthropic(*args, **kwargs)
         self._tracker_config = tracker_config or TrackerConfig.from_env()
+        # Pass the API key to config for model discovery
+        if not self._tracker_config.anthropic_api_key:
+            self._tracker_config.anthropic_api_key = self._inner.api_key or ""
         self._db = TokenDB(self._tracker_config)
         self._task_label = task_label or self._tracker_config.default_task_label
         self._project = project or self._tracker_config.default_project
@@ -65,6 +68,9 @@ class TrackedAsyncAnthropic:
     ) -> None:
         self._inner = anthropic.AsyncAnthropic(*args, **kwargs)
         self._tracker_config = tracker_config or TrackerConfig.from_env()
+        # Pass the API key to config for model discovery
+        if not self._tracker_config.anthropic_api_key:
+            self._tracker_config.anthropic_api_key = self._inner.api_key or ""
         self._db = TokenDB(self._tracker_config)
         self._task_label = task_label or self._tracker_config.default_task_label
         self._project = project or self._tracker_config.default_project

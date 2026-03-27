@@ -74,6 +74,55 @@ def _send_alert_email(config: TrackerConfig, error_msg: str) -> None:
         logger.debug("Failed to send alert email", exc_info=True)
 
 
+def _send_new_model_alert(config: TrackerConfig, new_models: list[str]) -> None:
+    """Send email alert when new models are discovered without pricing."""
+    if not config.alert_email or not config.smtp_user or not config.smtp_password:
+        logger.debug("New model alert skipped — SMTP not configured")
+        return
+
+    try:
+        model_list = "\n".join(f"  - {m}" for m in new_models)
+        subject = "claude-token-tracker: New Claude models detected (pricing unknown)"
+        body = (
+            f"The following new Claude models were discovered via the Anthropic Models API "
+            f"but are NOT in pricing.json:\n\n"
+            f"{model_list}\n\n"
+            f"These models will be tracked with $0.00 cost until pricing is added.\n\n"
+            f"Action required: Update pricing.json in the repository:\n"
+            f"  {config.pricing_url}\n\n"
+            f"Timestamp: {datetime.now(timezone.utc).isoformat()}"
+        )
+
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = config.smtp_user
+        msg["To"] = config.alert_email
+
+        with smtplib.SMTP(config.smtp_host, config.smtp_port) as server:
+            server.starttls()
+            server.login(config.smtp_user, config.smtp_password)
+            server.sendmail(config.smtp_user, [config.alert_email], msg.as_string())
+
+        logger.info("New model alert sent to %s for models: %s", config.alert_email, new_models)
+    except Exception:
+        logger.debug("Failed to send new model alert email", exc_info=True)
+
+
+def _discover_models_from_api(api_key: str, timeout: int = 10) -> list[str]:
+    """Fetch available model IDs from the Anthropic Models API."""
+    req = Request(
+        "https://api.anthropic.com/v1/models",
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "User-Agent": "claude-token-tracker",
+        },
+    )
+    with urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode())
+    return [m["id"] for m in data.get("data", [])]
+
+
 def _fetch_remote_pricing(url: str, timeout: int = 10) -> dict[str, dict[str, float]]:
     """Fetch pricing.json from the remote URL."""
     req = Request(url, headers={"User-Agent": "claude-token-tracker"})
@@ -150,7 +199,6 @@ def get_pricing(config: TrackerConfig | None = None) -> dict[str, dict[str, floa
             _write_cache(cache_path, remote_models)
             _pricing_cache = remote_models
             logger.info("Pricing refreshed from %s", config.pricing_url)
-            return _pricing_cache
         except Exception as e:
             error_msg = f"{type(e).__name__}: {e}"
             logger.warning("Failed to fetch remote pricing: %s", error_msg)
@@ -166,12 +214,35 @@ def get_pricing(config: TrackerConfig | None = None) -> dict[str, dict[str, floa
             if cached_models:
                 logger.info("Using stale cached pricing (%.1f days old)", age_days)
                 _pricing_cache = cached_models
-                return _pricing_cache
+            else:
+                # Last resort: hardcoded
+                logger.info("Using hardcoded pricing as fallback")
+                _pricing_cache = HARDCODED_PRICING.copy()
 
-            # Last resort: hardcoded
-            logger.info("Using hardcoded pricing as fallback")
-            _pricing_cache = HARDCODED_PRICING.copy()
-            return _pricing_cache
+        # ── Model auto-discovery via Anthropic API ──
+        if config.auto_discover_models and config.anthropic_api_key:
+            try:
+                api_models = _discover_models_from_api(config.anthropic_api_key)
+                new_models = [m for m in api_models if m not in _pricing_cache]
+                if new_models:
+                    logger.warning(
+                        "New models discovered without pricing: %s — tracking with $0.00",
+                        new_models,
+                    )
+                    # Add them with zero pricing so they still get tracked
+                    for m in new_models:
+                        _pricing_cache[m] = {"input_per_mtok": 0.0, "output_per_mtok": 0.0}
+
+                    # Alert via email in background
+                    threading.Thread(
+                        target=_send_new_model_alert,
+                        args=(config, new_models),
+                        daemon=True,
+                    ).start()
+            except Exception:
+                logger.debug("Model auto-discovery failed", exc_info=True)
+
+        return _pricing_cache
 
 
 def calculate_cost(
