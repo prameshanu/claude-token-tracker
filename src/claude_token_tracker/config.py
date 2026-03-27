@@ -39,13 +39,25 @@ class TrackerConfig:
     default_project: str = ""
     default_task_label: str = ""
 
+    # Pricing auto-refresh
+    pricing_url: str = "https://raw.githubusercontent.com/prameshanu/claude-token-tracker/main/pricing.json"
+    pricing_cache_path: str = "~/.claude_token_tracker/pricing_cache.json"
+    pricing_refresh_days: int = 7
+
+    # Email alerts (for pricing fetch failures)
+    alert_email: str = ""
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+
     # Behavior
     log_errors: bool = True
     async_logging: bool = True
     auto_create_table: bool = True
     pool_size: int = 5
 
-    # Custom pricing overrides: model_name -> {input_per_mtok, output_per_mtok}
+    # Custom pricing overrides (highest priority — overrides remote + hardcoded)
     pricing_overrides: dict[str, dict[str, float]] = field(default_factory=dict)
 
     @classmethod
@@ -61,6 +73,14 @@ class TrackerConfig:
             mysql_password=os.getenv("CLAUDE_TRACKER_MYSQL_PASSWORD", ""),
             mysql_database=os.getenv("CLAUDE_TRACKER_MYSQL_DATABASE", "claude_tracker"),
             excel_path=os.getenv("CLAUDE_TRACKER_EXCEL_PATH", "claude_token_usage.xlsx"),
+            pricing_url=os.getenv("CLAUDE_TRACKER_PRICING_URL", "https://raw.githubusercontent.com/prameshanu/claude-token-tracker/main/pricing.json"),
+            pricing_cache_path=os.getenv("CLAUDE_TRACKER_PRICING_CACHE_PATH", "~/.claude_token_tracker/pricing_cache.json"),
+            pricing_refresh_days=int(os.getenv("CLAUDE_TRACKER_PRICING_REFRESH_DAYS", "7")),
+            alert_email=os.getenv("CLAUDE_TRACKER_ALERT_EMAIL", ""),
+            smtp_host=os.getenv("CLAUDE_TRACKER_SMTP_HOST", "smtp.gmail.com"),
+            smtp_port=int(os.getenv("CLAUDE_TRACKER_SMTP_PORT", "587")),
+            smtp_user=os.getenv("CLAUDE_TRACKER_SMTP_USER", ""),
+            smtp_password=os.getenv("CLAUDE_TRACKER_SMTP_PASSWORD", ""),
             default_project=os.getenv("CLAUDE_TRACKER_DEFAULT_PROJECT", ""),
             default_task_label=os.getenv("CLAUDE_TRACKER_DEFAULT_TASK_LABEL", ""),
             log_errors=os.getenv("CLAUDE_TRACKER_LOG_ERRORS", "true").lower() == "true",

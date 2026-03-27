@@ -151,6 +151,13 @@ All settings can be configured via environment variables or by passing a `Tracke
 | `CLAUDE_TRACKER_MYSQL_PASSWORD` | `""` | MySQL password |
 | `CLAUDE_TRACKER_MYSQL_DATABASE` | `claude_tracker` | MySQL database name |
 | `CLAUDE_TRACKER_EXCEL_PATH` | `claude_token_usage.xlsx` | Excel file path |
+| `CLAUDE_TRACKER_PRICING_URL` | GitHub raw URL | Remote pricing.json URL |
+| `CLAUDE_TRACKER_PRICING_REFRESH_DAYS` | `7` | Days between pricing refreshes |
+| `CLAUDE_TRACKER_ALERT_EMAIL` | `""` | Email for fetch failure alerts |
+| `CLAUDE_TRACKER_SMTP_HOST` | `smtp.gmail.com` | SMTP server |
+| `CLAUDE_TRACKER_SMTP_PORT` | `587` | SMTP port |
+| `CLAUDE_TRACKER_SMTP_USER` | `""` | SMTP username |
+| `CLAUDE_TRACKER_SMTP_PASSWORD` | `""` | SMTP password / app password |
 | `CLAUDE_TRACKER_DEFAULT_PROJECT` | `""` | Default project label for all logs |
 | `CLAUDE_TRACKER_DEFAULT_TASK_LABEL` | `""` | Default task label for all logs |
 | `CLAUDE_TRACKER_AUTO_CREATE_TABLE` | `true` | Auto-create tables on first use |
@@ -219,9 +226,40 @@ message = await client.messages.create(model="claude-sonnet-4-20250514", ...)
 message = await client.messages.create(model="claude-sonnet-4-20250514", task_label="summarize", ...)
 ```
 
-## Supported Models & Pricing
+## Pricing — Auto-Refreshed
 
-Built-in pricing (USD per million tokens):
+Pricing is automatically fetched from the [`pricing.json`](pricing.json) file in this repo and cached locally for 7 days. No manual updates needed.
+
+**How it works:**
+1. On first use, fetches `pricing.json` from GitHub
+2. Caches at `~/.claude_token_tracker/pricing_cache.json`
+3. Re-fetches every 7 days automatically
+4. Falls back to hardcoded defaults if offline
+5. Sends email alert if fetch fails (optional)
+
+**Priority:** `pricing_overrides` (config) > remote `pricing.json` > local cache > hardcoded defaults
+
+### Email alerts on pricing fetch failure
+
+```bash
+export CLAUDE_TRACKER_ALERT_EMAIL=you@example.com
+export CLAUDE_TRACKER_SMTP_HOST=smtp.gmail.com
+export CLAUDE_TRACKER_SMTP_PORT=587
+export CLAUDE_TRACKER_SMTP_USER=you@gmail.com
+export CLAUDE_TRACKER_SMTP_PASSWORD=your_app_password
+```
+
+### Custom pricing overrides (highest priority)
+
+```python
+config = TrackerConfig(
+    pricing_overrides={
+        "my-custom-model": {"input_per_mtok": 2.00, "output_per_mtok": 10.00}
+    }
+)
+```
+
+### Current pricing (USD per million tokens)
 
 | Model | Input | Output |
 |---|---|---|
@@ -232,16 +270,6 @@ Built-in pricing (USD per million tokens):
 | claude-3-5-sonnet-20241022 | $3.00 | $15.00 |
 | claude-3-5-haiku-20241022 | $0.80 | $4.00 |
 | claude-3-opus-20240229 | $15.00 | $75.00 |
-
-Custom pricing overrides:
-
-```python
-config = TrackerConfig(
-    pricing_overrides={
-        "my-custom-model": {"input_per_mtok": 2.00, "output_per_mtok": 10.00}
-    }
-)
-```
 
 ## MySQL Setup
 
