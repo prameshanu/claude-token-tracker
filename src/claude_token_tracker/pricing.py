@@ -307,19 +307,18 @@ def get_pricing(config: TrackerConfig | None = None) -> dict[str, dict[str, floa
                     # Step 1: Try scraping pricing from Anthropic's website
                     scraped = _scrape_pricing_for_models(new_models)
 
-                    # Step 2: Apply scraped pricing
+                    # Step 2: Only add models where scraping found real pricing
                     for m in new_models:
                         if m in scraped:
                             _pricing_cache[m] = scraped[m]
                             logger.info("Auto-scraped pricing for %s: %s", m, scraped[m])
-                        else:
-                            _pricing_cache[m] = {"input_per_mtok": 0.0, "output_per_mtok": 0.0}
+                        # Models without pricing are NOT added — they stay unknown
 
-                    # Step 3: Only email about models where scraping failed
+                    # Step 3: Email only about models where scraping failed
                     unpriced = [m for m in new_models if m not in scraped]
                     if unpriced:
                         logger.warning(
-                            "Could not scrape pricing for: %s — tracking with $0.00",
+                            "Could not scrape pricing for: %s — these models will not have cost tracking",
                             unpriced,
                         )
                         threading.Thread(
@@ -330,8 +329,9 @@ def get_pricing(config: TrackerConfig | None = None) -> dict[str, dict[str, floa
                     else:
                         logger.info("All new model pricing scraped successfully — no email needed")
 
-                    # Update cache file with new models
-                    _write_cache(cache_path, _pricing_cache)
+                    # Update cache file if any new pricing was scraped
+                    if scraped:
+                        _write_cache(cache_path, _pricing_cache)
             except Exception:
                 logger.debug("Model auto-discovery failed", exc_info=True)
 
