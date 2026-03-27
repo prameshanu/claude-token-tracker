@@ -1,22 +1,32 @@
 # claude-token-tracker
 
-Automatic token usage and cost tracking for the Anthropic Claude API. Drop-in replacement for the Anthropic SDK client that logs every API call to MySQL and/or Excel — with zero changes to your existing code.
+Automatic token usage and cost tracking for the Anthropic Claude API. Drop-in replacement for the Anthropic SDK client that logs every API call — with zero changes to your existing code.
 
 ## Features
 
+- **Zero setup** — works out of the box with SQLite (no server needed)
 - **Drop-in replacement** — swap one import, everything else stays the same
 - **Automatic tracking** — intercepts `messages.create()` and `messages.stream()` transparently
-- **MySQL logging** — persistent storage with connection pooling
-- **Excel export** — real-time logging to `.xlsx` or on-demand export from MySQL
+- **Multiple backends** — SQLite (default), MySQL, Excel, or all at once
 - **Cost calculation** — built-in pricing for all Claude models (configurable)
 - **Sync + Async** — supports both `Anthropic` and `AsyncAnthropic` clients
-- **Non-blocking** — DB/Excel writes happen in background threads by default
+- **Non-blocking** — writes happen in background threads by default
 - **Never breaks your app** — all tracking is wrapped in try/except
 
 ## Installation
 
 ```bash
+# Basic install (SQLite backend — no extra dependencies)
 pip install claude-token-tracker
+
+# With MySQL support
+pip install claude-token-tracker[mysql]
+
+# With Excel support
+pip install claude-token-tracker[excel]
+
+# Everything
+pip install claude-token-tracker[all]
 ```
 
 Or install from source:
@@ -24,21 +34,12 @@ Or install from source:
 ```bash
 git clone https://github.com/prameshanu/claude-token-tracker.git
 cd claude-token-tracker
-pip install -e .
+pip install -e ".[all]"
 ```
 
 ## Quick Start
 
-### 1. Set environment variables
-
-```bash
-export CLAUDE_TRACKER_MYSQL_HOST=your-mysql-host
-export CLAUDE_TRACKER_MYSQL_USER=your_user
-export CLAUDE_TRACKER_MYSQL_PASSWORD=your_password
-export CLAUDE_TRACKER_MYSQL_DATABASE=claude_tracker
-```
-
-### 2. Swap the import
+### Simplest usage (SQLite — zero config)
 
 ```python
 # Before
@@ -50,25 +51,53 @@ from claude_token_tracker import TrackedAsyncAnthropic
 client = TrackedAsyncAnthropic(api_key="sk-...", project="my_app", task_label="generate")
 ```
 
-That's it. All your existing `client.messages.create(...)` and `async with client.messages.stream(...)` calls work unchanged.
+That's it. All your existing `client.messages.create(...)` and `async with client.messages.stream(...)` calls work unchanged. Usage is logged to `~/.claude_token_tracker/usage.db` automatically.
 
-### 3. Query your usage
+### Query your usage
 
-```sql
-SELECT model,
-       SUM(input_tokens) AS total_input,
-       SUM(output_tokens) AS total_output,
-       SUM(input_cost + output_cost) AS total_cost
-FROM claude_token_usage
-GROUP BY model;
+```python
+import sqlite3
+conn = sqlite3.connect("~/.claude_token_tracker/usage.db")
+for row in conn.execute("SELECT model, SUM(input_tokens), SUM(output_tokens), SUM(total_cost) FROM claude_token_usage GROUP BY model"):
+    print(row)
+```
+
+## Storage Backends
+
+| Backend | Setup Required | Install | Best For |
+|---|---|---|---|
+| **SQLite** (default) | None | `pip install claude-token-tracker` | Local development, personal use |
+| **MySQL** | MySQL server | `pip install claude-token-tracker[mysql]` | Production, team dashboards |
+| **Excel** | None | `pip install claude-token-tracker[excel]` | Sharing reports, non-technical users |
+| **All** | MySQL server | `pip install claude-token-tracker[all]` | Logging to everything at once |
+
+### Switch backends via environment variable
+
+```bash
+# SQLite (default — no config needed)
+export CLAUDE_TRACKER_STORAGE=sqlite
+
+# MySQL
+export CLAUDE_TRACKER_STORAGE=mysql
+export CLAUDE_TRACKER_MYSQL_HOST=your-mysql-host
+export CLAUDE_TRACKER_MYSQL_USER=your_user
+export CLAUDE_TRACKER_MYSQL_PASSWORD=your_password
+export CLAUDE_TRACKER_MYSQL_DATABASE=claude_tracker
+
+# Excel only
+export CLAUDE_TRACKER_STORAGE=excel
+export CLAUDE_TRACKER_EXCEL_PATH=/path/to/usage.xlsx
+
+# All backends at once
+export CLAUDE_TRACKER_STORAGE=all
 ```
 
 ## Excel Support
 
-### Real-time logging to Excel (alongside MySQL)
+### Real-time logging to Excel
 
 ```bash
-export CLAUDE_TRACKER_EXCEL_ENABLED=true
+export CLAUDE_TRACKER_STORAGE=excel
 export CLAUDE_TRACKER_EXCEL_PATH=/path/to/usage.xlsx
 ```
 
@@ -91,16 +120,17 @@ All settings can be configured via environment variables or by passing a `Tracke
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `CLAUDE_TRACKER_MYSQL_HOST` | `your-mysql-host` | MySQL server host |
+| `CLAUDE_TRACKER_STORAGE` | `sqlite` | Backend: `sqlite`, `mysql`, `excel`, or `all` |
+| `CLAUDE_TRACKER_SQLITE_PATH` | `~/.claude_token_tracker/usage.db` | SQLite database file path |
+| `CLAUDE_TRACKER_MYSQL_HOST` | `localhost` | MySQL server host |
 | `CLAUDE_TRACKER_MYSQL_PORT` | `3306` | MySQL server port |
 | `CLAUDE_TRACKER_MYSQL_USER` | `""` | MySQL username |
 | `CLAUDE_TRACKER_MYSQL_PASSWORD` | `""` | MySQL password |
 | `CLAUDE_TRACKER_MYSQL_DATABASE` | `claude_tracker` | MySQL database name |
+| `CLAUDE_TRACKER_EXCEL_PATH` | `claude_token_usage.xlsx` | Excel file path |
 | `CLAUDE_TRACKER_DEFAULT_PROJECT` | `""` | Default project label for all logs |
 | `CLAUDE_TRACKER_DEFAULT_TASK_LABEL` | `""` | Default task label for all logs |
-| `CLAUDE_TRACKER_EXCEL_ENABLED` | `false` | Enable real-time Excel logging |
-| `CLAUDE_TRACKER_EXCEL_PATH` | `claude_token_usage.xlsx` | Path to Excel file |
-| `CLAUDE_TRACKER_AUTO_CREATE_TABLE` | `true` | Auto-create MySQL table on first use |
+| `CLAUDE_TRACKER_AUTO_CREATE_TABLE` | `true` | Auto-create tables on first use |
 | `CLAUDE_TRACKER_POOL_SIZE` | `5` | MySQL connection pool size |
 
 ### Programmatic configuration
@@ -108,21 +138,28 @@ All settings can be configured via environment variables or by passing a `Tracke
 ```python
 from claude_token_tracker import TrackedAsyncAnthropic, TrackerConfig
 
+# SQLite (simplest)
+client = TrackedAsyncAnthropic(api_key="sk-...", project="my_app")
+
+# MySQL
 config = TrackerConfig(
+    storage_backend="mysql",
     mysql_host="your-mysql-host",
     mysql_user="tracker",
     mysql_password="secret",
     mysql_database="claude_tracker",
-    excel_enabled=True,
+)
+client = TrackedAsyncAnthropic(api_key="sk-...", tracker_config=config, project="my_app")
+
+# All backends at once
+config = TrackerConfig(
+    storage_backend="all",
+    mysql_host="your-mysql-host",
+    mysql_user="tracker",
+    mysql_password="secret",
     excel_path="usage.xlsx",
 )
-
-client = TrackedAsyncAnthropic(
-    api_key="sk-...",
-    tracker_config=config,
-    project="my_app",
-    task_label="summarize",
-)
+client = TrackedAsyncAnthropic(api_key="sk-...", tracker_config=config, project="my_app")
 ```
 
 ## What Gets Tracked
