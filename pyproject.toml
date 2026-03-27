@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "claude-token-tracker"
+version = "0.1.0"
+description = "Automatic token usage and cost tracking for the Anthropic SDK"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Pramesh Anuragi" },
+]
+keywords = ["anthropic", "claude", "token-tracking", "cost-tracking", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "anthropic>=0.40.0",
+    "mysql-connector-python>=9.0.0",
+    "openpyxl>=3.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.urls]
+Homepage = "https://github.com/prameshanu/claude-token-tracker"
+Repository = "https://github.com/prameshanu/claude-token-tracker"
+Issues = "https://github.com/prameshanu/claude-token-tracker/issues"
+
+[project.scripts]
+claude-tracker-export = "claude_token_tracker.excel:cli_export"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claude_token_tracker"]
