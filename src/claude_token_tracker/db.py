@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import sqlite3
 import threading
+from datetime import datetime, timezone
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -155,6 +157,39 @@ class _MySQLBackend:
             conn.close()
 
 
+# ── JSON backend ──
+
+class _JSONBackend:
+    """Simplest possible backend — appends JSON lines to a file. No dependencies."""
+
+    def __init__(self, config: TrackerConfig) -> None:
+        self._path = os.path.expanduser(config.json_path)
+        self._lock = threading.Lock()
+        Path(self._path).parent.mkdir(parents=True, exist_ok=True)
+
+    def insert(self, row: dict[str, Any]) -> None:
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "request_id": row.get("request_id"),
+            "model": row.get("model"),
+            "input_tokens": row.get("input_tokens", 0),
+            "output_tokens": row.get("output_tokens", 0),
+            "total_tokens": (row.get("input_tokens", 0) or 0) + (row.get("output_tokens", 0) or 0),
+            "cache_read_tokens": row.get("cache_read_tokens", 0),
+            "cache_creation_tokens": row.get("cache_creation_tokens", 0),
+            "input_cost": row.get("input_cost", 0),
+            "output_cost": row.get("output_cost", 0),
+            "total_cost": round((row.get("input_cost", 0) or 0) + (row.get("output_cost", 0) or 0), 6),
+            "task_label": row.get("task_label"),
+            "project": row.get("project"),
+            "method": row.get("method"),
+            "duration_ms": row.get("duration_ms"),
+        }
+        with self._lock:
+            with open(self._path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+
+
 # ── Excel backend ──
 
 class _ExcelBackend:
@@ -174,7 +209,8 @@ class TokenDB:
     """Routes inserts to the configured storage backend(s).
 
     Backends:
-        "sqlite" — local file, zero setup (default)
+        "json"   — simplest, append-only JSON lines file (no dependencies)
+        "sqlite" — local database, zero setup (default)
         "mysql"  — MySQL server
         "excel"  — .xlsx file
         "all"    — writes to all backends
@@ -185,6 +221,8 @@ class TokenDB:
         self._backends: list = []
         backend = config.storage_backend.lower()
 
+        if backend in ("json", "all"):
+            self._backends.append(_JSONBackend(config))
         if backend in ("sqlite", "all"):
             self._backends.append(_SQLiteBackend(config))
         if backend in ("mysql", "all"):

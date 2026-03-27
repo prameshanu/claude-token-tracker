@@ -9,14 +9,18 @@ class TrackerConfig:
     """Configuration for the Claude token tracker.
 
     Storage backends:
-        - "sqlite"  (default) — zero setup, local file, works everywhere
+        - "json"    — simplest, no dependencies, JSON lines file
+        - "sqlite"  (default) — zero setup, local database, works everywhere
         - "mysql"   — requires a MySQL server
         - "excel"   — logs to an .xlsx file only
         - "all"     — logs to all enabled backends simultaneously
     """
 
-    # Storage backend: "sqlite" | "mysql" | "excel" | "all"
+    # Storage backend: "json" | "sqlite" | "mysql" | "excel" | "all"
     storage_backend: str = "sqlite"
+
+    # JSON lines file (simplest — no dependencies at all)
+    json_path: str = "~/.claude_token_tracker/usage.jsonl"
 
     # SQLite (default — no setup required)
     sqlite_path: str = "~/.claude_token_tracker/usage.db"
@@ -49,6 +53,7 @@ class TrackerConfig:
         """Load configuration from CLAUDE_TRACKER_* environment variables."""
         return cls(
             storage_backend=os.getenv("CLAUDE_TRACKER_STORAGE", "sqlite"),
+            json_path=os.getenv("CLAUDE_TRACKER_JSON_PATH", "~/.claude_token_tracker/usage.jsonl"),
             sqlite_path=os.getenv("CLAUDE_TRACKER_SQLITE_PATH", "~/.claude_token_tracker/usage.db"),
             mysql_host=os.getenv("CLAUDE_TRACKER_MYSQL_HOST", "localhost"),
             mysql_port=int(os.getenv("CLAUDE_TRACKER_MYSQL_PORT", "3306")),

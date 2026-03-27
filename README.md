@@ -4,10 +4,10 @@ Automatic token usage and cost tracking for the Anthropic Claude API. Drop-in re
 
 ## Features
 
-- **Zero setup** — works out of the box with SQLite (no server needed)
+- **Zero setup** — works out of the box with SQLite or JSON (no server needed)
 - **Drop-in replacement** — swap one import, everything else stays the same
 - **Automatic tracking** — intercepts `messages.create()` and `messages.stream()` transparently
-- **Multiple backends** — SQLite (default), MySQL, Excel, or all at once
+- **Multiple backends** — JSON, SQLite (default), MySQL, Excel, or all at once
 - **Cost calculation** — built-in pricing for all Claude models (configurable)
 - **Sync + Async** — supports both `Anthropic` and `AsyncAnthropic` clients
 - **Non-blocking** — writes happen in background threads by default
@@ -66,7 +66,8 @@ for row in conn.execute("SELECT model, SUM(input_tokens), SUM(output_tokens), SU
 
 | Backend | Setup Required | Install | Best For |
 |---|---|---|---|
-| **SQLite** (default) | None | `pip install claude-token-tracker` | Local development, personal use |
+| **JSON** | None | `pip install claude-token-tracker` | Simplest possible, human-readable logs |
+| **SQLite** (default) | None | `pip install claude-token-tracker` | Local development, queryable data |
 | **MySQL** | MySQL server | `pip install claude-token-tracker[mysql]` | Production, team dashboards |
 | **Excel** | None | `pip install claude-token-tracker[excel]` | Sharing reports, non-technical users |
 | **All** | MySQL server | `pip install claude-token-tracker[all]` | Logging to everything at once |
@@ -74,6 +75,9 @@ for row in conn.execute("SELECT model, SUM(input_tokens), SUM(output_tokens), SU
 ### Switch backends via environment variable
 
 ```bash
+# JSON (simplest — just a file with one JSON object per line)
+export CLAUDE_TRACKER_STORAGE=json
+
 # SQLite (default — no config needed)
 export CLAUDE_TRACKER_STORAGE=sqlite
 
@@ -90,6 +94,24 @@ export CLAUDE_TRACKER_EXCEL_PATH=/path/to/usage.xlsx
 
 # All backends at once
 export CLAUDE_TRACKER_STORAGE=all
+```
+
+### JSON backend
+
+The simplest option — each API call appends one JSON line to `~/.claude_token_tracker/usage.jsonl`:
+
+```python
+from claude_token_tracker import TrackedAsyncAnthropic, TrackerConfig
+config = TrackerConfig(storage_backend="json")
+client = TrackedAsyncAnthropic(api_key="sk-...", tracker_config=config, project="my_app")
+```
+
+Read it with any tool:
+```python
+import json
+with open("~/.claude_token_tracker/usage.jsonl") as f:
+    entries = [json.loads(line) for line in f]
+print(f"Total cost: ${sum(e['total_cost'] for e in entries):.4f}")
 ```
 
 ## Excel Support
@@ -120,7 +142,8 @@ All settings can be configured via environment variables or by passing a `Tracke
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `CLAUDE_TRACKER_STORAGE` | `sqlite` | Backend: `sqlite`, `mysql`, `excel`, or `all` |
+| `CLAUDE_TRACKER_STORAGE` | `sqlite` | Backend: `json`, `sqlite`, `mysql`, `excel`, or `all` |
+| `CLAUDE_TRACKER_JSON_PATH` | `~/.claude_token_tracker/usage.jsonl` | JSON lines file path |
 | `CLAUDE_TRACKER_SQLITE_PATH` | `~/.claude_token_tracker/usage.db` | SQLite database file path |
 | `CLAUDE_TRACKER_MYSQL_HOST` | `localhost` | MySQL server host |
 | `CLAUDE_TRACKER_MYSQL_PORT` | `3306` | MySQL server port |
