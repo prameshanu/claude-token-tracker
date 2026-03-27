@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import smtplib
 import threading
 import time
@@ -82,14 +83,17 @@ def _send_new_model_alert(config: TrackerConfig, new_models: list[str]) -> None:
 
     try:
         model_list = "\n".join(f"  - {m}" for m in new_models)
-        subject = "claude-token-tracker: New Claude models detected (pricing unknown)"
+        subject = "claude-token-tracker: New Claude models — scraping failed, pricing unknown"
         body = (
-            f"The following new Claude models were discovered via the Anthropic Models API "
-            f"but are NOT in pricing.json:\n\n"
-            f"{model_list}\n\n"
+            f"The following new Claude models were discovered via the Anthropic Models API.\n"
+            f"Scraping Anthropic's website for pricing was attempted but FAILED.\n\n"
+            f"Models without pricing:\n{model_list}\n\n"
             f"These models will be tracked with $0.00 cost until pricing is added.\n\n"
             f"Action required: Update pricing.json in the repository:\n"
             f"  {config.pricing_url}\n\n"
+            f"Scraping was attempted on:\n"
+            f"  - https://docs.anthropic.com/en/docs/about-claude/models\n"
+            f"  - https://www.anthropic.com/pricing\n\n"
             f"Timestamp: {datetime.now(timezone.utc).isoformat()}"
         )
 
@@ -121,6 +125,79 @@ def _discover_models_from_api(api_key: str, timeout: int = 10) -> list[str]:
     with urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read().decode())
     return [m["id"] for m in data.get("data", [])]
+
+
+ANTHROPIC_PRICING_URLS = [
+    "https://docs.anthropic.com/en/docs/about-claude/models",
+    "https://www.anthropic.com/pricing",
+]
+
+
+def _scrape_pricing_for_model(model_id: str, timeout: int = 10) -> dict[str, float] | None:
+    """Attempt to scrape pricing from Anthropic's website for a specific model.
+
+    Tries multiple pages and looks for pricing patterns near the model name.
+    Returns {"input_per_mtok": X, "output_per_mtok": Y} or None if not found.
+    """
+    # Extract base model name for matching (e.g., "claude-sonnet-4" from "claude-sonnet-4-20250514")
+    # Also try the full model ID
+    search_terms = [model_id]
+    # Strip date suffix for broader matching
+    base = re.sub(r"-\d{8}$", "", model_id)
+    if base != model_id:
+        search_terms.append(base)
+
+    for url in ANTHROPIC_PRICING_URLS:
+        try:
+            req = Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; claude-token-tracker/0.1)",
+            })
+            with urlopen(req, timeout=timeout) as resp:
+                html = resp.read().decode("utf-8", errors="ignore")
+
+            for term in search_terms:
+                # Look for pricing patterns near the model name
+                # Common patterns: "$3.00", "$15.00 / MTok", "$3 / million"
+                escaped = re.escape(term)
+                # Search in a window of ~500 chars around the model name
+                for match in re.finditer(escaped, html, re.IGNORECASE):
+                    start = max(0, match.start() - 200)
+                    end = min(len(html), match.end() + 500)
+                    context = html[start:end]
+
+                    # Look for dollar amounts — pattern: $X.XX
+                    prices = re.findall(r"\$(\d+(?:\.\d{1,2})?)", context)
+                    if len(prices) >= 2:
+                        # Typically: input price first, output price second
+                        input_price = float(prices[0])
+                        output_price = float(prices[1])
+                        # Sanity check: output is usually more expensive than input
+                        if 0 < input_price <= 100 and 0 < output_price <= 500:
+                            logger.info(
+                                "Scraped pricing for %s: input=$%.2f/MTok, output=$%.2f/MTok",
+                                model_id, input_price, output_price,
+                            )
+                            return {
+                                "input_per_mtok": input_price,
+                                "output_per_mtok": output_price,
+                            }
+        except Exception:
+            logger.debug("Failed to scrape %s for pricing", url, exc_info=True)
+            continue
+
+    return None
+
+
+def _scrape_pricing_for_models(
+    model_ids: list[str], timeout: int = 10
+) -> dict[str, dict[str, float]]:
+    """Try to scrape pricing for multiple models. Returns found pricing only."""
+    found: dict[str, dict[str, float]] = {}
+    for model_id in model_ids:
+        pricing = _scrape_pricing_for_model(model_id, timeout)
+        if pricing:
+            found[model_id] = pricing
+    return found
 
 
 def _fetch_remote_pricing(url: str, timeout: int = 10) -> dict[str, dict[str, float]]:
@@ -225,20 +302,36 @@ def get_pricing(config: TrackerConfig | None = None) -> dict[str, dict[str, floa
                 api_models = _discover_models_from_api(config.anthropic_api_key)
                 new_models = [m for m in api_models if m not in _pricing_cache]
                 if new_models:
-                    logger.warning(
-                        "New models discovered without pricing: %s — tracking with $0.00",
-                        new_models,
-                    )
-                    # Add them with zero pricing so they still get tracked
-                    for m in new_models:
-                        _pricing_cache[m] = {"input_per_mtok": 0.0, "output_per_mtok": 0.0}
+                    logger.info("New models discovered: %s — attempting to scrape pricing", new_models)
 
-                    # Alert via email in background
-                    threading.Thread(
-                        target=_send_new_model_alert,
-                        args=(config, new_models),
-                        daemon=True,
-                    ).start()
+                    # Step 1: Try scraping pricing from Anthropic's website
+                    scraped = _scrape_pricing_for_models(new_models)
+
+                    # Step 2: Apply scraped pricing
+                    for m in new_models:
+                        if m in scraped:
+                            _pricing_cache[m] = scraped[m]
+                            logger.info("Auto-scraped pricing for %s: %s", m, scraped[m])
+                        else:
+                            _pricing_cache[m] = {"input_per_mtok": 0.0, "output_per_mtok": 0.0}
+
+                    # Step 3: Only email about models where scraping failed
+                    unpriced = [m for m in new_models if m not in scraped]
+                    if unpriced:
+                        logger.warning(
+                            "Could not scrape pricing for: %s — tracking with $0.00",
+                            unpriced,
+                        )
+                        threading.Thread(
+                            target=_send_new_model_alert,
+                            args=(config, unpriced),
+                            daemon=True,
+                        ).start()
+                    else:
+                        logger.info("All new model pricing scraped successfully — no email needed")
+
+                    # Update cache file with new models
+                    _write_cache(cache_path, _pricing_cache)
             except Exception:
                 logger.debug("Model auto-discovery failed", exc_info=True)
 
