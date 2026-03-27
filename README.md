@@ -32,7 +32,7 @@ pip install -e .
 ### 1. Set environment variables
 
 ```bash
-export CLAUDE_TRACKER_MYSQL_HOST=10.8.0.6
+export CLAUDE_TRACKER_MYSQL_HOST=your-mysql-host
 export CLAUDE_TRACKER_MYSQL_USER=your_user
 export CLAUDE_TRACKER_MYSQL_PASSWORD=your_password
 export CLAUDE_TRACKER_MYSQL_DATABASE=claude_tracker
@@ -91,7 +91,7 @@ All settings can be configured via environment variables or by passing a `Tracke
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `CLAUDE_TRACKER_MYSQL_HOST` | `10.8.0.6` | MySQL server host |
+| `CLAUDE_TRACKER_MYSQL_HOST` | `your-mysql-host` | MySQL server host |
 | `CLAUDE_TRACKER_MYSQL_PORT` | `3306` | MySQL server port |
 | `CLAUDE_TRACKER_MYSQL_USER` | `""` | MySQL username |
 | `CLAUDE_TRACKER_MYSQL_PASSWORD` | `""` | MySQL password |
@@ -109,7 +109,7 @@ All settings can be configured via environment variables or by passing a `Tracke
 from claude_token_tracker import TrackedAsyncAnthropic, TrackerConfig
 
 config = TrackerConfig(
-    mysql_host="10.8.0.6",
+    mysql_host="your-mysql-host",
     mysql_user="tracker",
     mysql_password="secret",
     mysql_database="claude_tracker",
@@ -188,7 +188,7 @@ config = TrackerConfig(
 The table is auto-created on first use. To create it manually:
 
 ```bash
-mysql -h 10.8.0.6 -u your_user -p claude_tracker < src/claude_token_tracker/schema.sql
+mysql -h your-mysql-host -u your_user -p claude_tracker < src/claude_token_tracker/schema.sql
 ```
 
 ## License

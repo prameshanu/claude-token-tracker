@@ -9,7 +9,7 @@ class TrackerConfig:
     """Configuration for the Claude token tracker."""
 
     # MySQL connection
-    mysql_host: str = "10.8.0.6"
+    mysql_host: str = "localhost"
     mysql_port: int = 3306
     mysql_user: str = ""
     mysql_password: str = ""
@@ -36,7 +36,7 @@ class TrackerConfig:
     def from_env(cls) -> TrackerConfig:
         """Load configuration from CLAUDE_TRACKER_* environment variables."""
         return cls(
-            mysql_host=os.getenv("CLAUDE_TRACKER_MYSQL_HOST", "10.8.0.6"),
+            mysql_host=os.getenv("CLAUDE_TRACKER_MYSQL_HOST", "localhost"),
             mysql_port=int(os.getenv("CLAUDE_TRACKER_MYSQL_PORT", "3306")),
             mysql_user=os.getenv("CLAUDE_TRACKER_MYSQL_USER", ""),
             mysql_password=os.getenv("CLAUDE_TRACKER_MYSQL_PASSWORD", ""),
