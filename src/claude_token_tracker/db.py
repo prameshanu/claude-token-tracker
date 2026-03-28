@@ -157,6 +157,77 @@ class _MySQLBackend:
             conn.close()
 
 
+MSSQL_CREATE = """
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'claude_token_usage')
+CREATE TABLE claude_token_usage (
+    id                    BIGINT IDENTITY(1,1) PRIMARY KEY,
+    request_id            NVARCHAR(64)  NULL,
+    model                 NVARCHAR(64)  NOT NULL,
+    input_tokens          INT           NOT NULL DEFAULT 0,
+    output_tokens         INT           NOT NULL DEFAULT 0,
+    total_tokens          AS (input_tokens + output_tokens) PERSISTED,
+    cache_read_tokens     INT           NOT NULL DEFAULT 0,
+    cache_creation_tokens INT           NOT NULL DEFAULT 0,
+    input_cost            DECIMAL(12,6) NOT NULL DEFAULT 0,
+    output_cost           DECIMAL(12,6) NOT NULL DEFAULT 0,
+    total_cost            AS (input_cost + output_cost) PERSISTED,
+    task_label            NVARCHAR(128) NULL,
+    project               NVARCHAR(128) NULL,
+    method                NVARCHAR(16)  NOT NULL,
+    duration_ms           INT           NULL,
+    created_at            DATETIME2     NOT NULL DEFAULT GETUTCDATE()
+);
+"""
+
+MSSQL_INSERT = """
+INSERT INTO claude_token_usage
+    (request_id, model, input_tokens, output_tokens,
+     cache_read_tokens, cache_creation_tokens,
+     input_cost, output_cost,
+     task_label, project, method, duration_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+
+# ── MSSQL backend ──
+
+class _MSSQLBackend:
+    """MSSQL / Azure SQL Edge storage."""
+
+    def __init__(self, config: TrackerConfig) -> None:
+        self._config = config
+        self._init_lock = threading.Lock()
+        self._initialized = False
+
+    def _get_conn(self):
+        import pymssql
+        conn = pymssql.connect(
+            server=self._config.mssql_host,
+            port=self._config.mssql_port,
+            user=self._config.mssql_user,
+            password=self._config.mssql_password,
+            database=self._config.mssql_database,
+        )
+        if self._config.auto_create_table and not self._initialized:
+            with self._init_lock:
+                if not self._initialized:
+                    cursor = conn.cursor()
+                    cursor.execute(MSSQL_CREATE)
+                    conn.commit()
+                    self._initialized = True
+        return conn
+
+    def insert(self, row: dict[str, Any]) -> None:
+        values = tuple(row.get(c) for c in COLUMNS)
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(MSSQL_INSERT, values)
+            conn.commit()
+        finally:
+            conn.close()
+
+
 # ── JSON backend ──
 
 class _JSONBackend:
@@ -212,6 +283,7 @@ class TokenDB:
         "json"   — simplest, append-only JSON lines file (no dependencies)
         "sqlite" — local database, zero setup (default)
         "mysql"  — MySQL server
+        "mssql"  — MSSQL / Azure SQL Edge server
         "excel"  — .xlsx file
         "all"    — writes to all backends
     """
@@ -227,6 +299,8 @@ class TokenDB:
             self._backends.append(_SQLiteBackend(config))
         if backend in ("mysql", "all"):
             self._backends.append(_MySQLBackend(config))
+        if backend in ("mssql", "all"):
+            self._backends.append(_MSSQLBackend(config))
         if backend in ("excel", "all"):
             self._backends.append(_ExcelBackend(config))
 

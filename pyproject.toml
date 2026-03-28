@@ -29,8 +29,9 @@ dependencies = [
 
 [project.optional-dependencies]
 mysql = ["mysql-connector-python>=9.0.0"]
+mssql = ["pymssql>=2.2.0"]
 excel = ["openpyxl>=3.1.0"]
-all = ["mysql-connector-python>=9.0.0", "openpyxl>=3.1.0"]
+all = ["mysql-connector-python>=9.0.0", "pymssql>=2.2.0", "openpyxl>=3.1.0"]
 dev = ["pytest", "pytest-asyncio"]
 
 [project.urls]

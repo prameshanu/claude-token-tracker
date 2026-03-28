@@ -12,11 +12,12 @@ class TrackerConfig:
         - "json"    — simplest, no dependencies, JSON lines file
         - "sqlite"  (default) — zero setup, local database, works everywhere
         - "mysql"   — requires a MySQL server
+        - "mssql"   — requires a MSSQL / Azure SQL Edge server
         - "excel"   — logs to an .xlsx file only
         - "all"     — logs to all enabled backends simultaneously
     """
 
-    # Storage backend: "json" | "sqlite" | "mysql" | "excel" | "all"
+    # Storage backend: "json" | "sqlite" | "mysql" | "mssql" | "excel" | "all"
     storage_backend: str = "sqlite"
 
     # JSON lines file (simplest — no dependencies at all)
@@ -31,6 +32,13 @@ class TrackerConfig:
     mysql_user: str = ""
     mysql_password: str = ""
     mysql_database: str = "claude_tracker"
+
+    # MSSQL / Azure SQL Edge (only needed if storage_backend is "mssql" or "all")
+    mssql_host: str = "localhost"
+    mssql_port: int = 1433
+    mssql_user: str = ""
+    mssql_password: str = ""
+    mssql_database: str = "claude_tracker"
 
     # Excel logging (only needed if storage_backend is "excel" or "all")
     excel_path: str = "claude_token_usage.xlsx"
@@ -74,6 +82,11 @@ class TrackerConfig:
             mysql_user=os.getenv("CLAUDE_TRACKER_MYSQL_USER", ""),
             mysql_password=os.getenv("CLAUDE_TRACKER_MYSQL_PASSWORD", ""),
             mysql_database=os.getenv("CLAUDE_TRACKER_MYSQL_DATABASE", "claude_tracker"),
+            mssql_host=os.getenv("CLAUDE_TRACKER_MSSQL_HOST", "localhost"),
+            mssql_port=int(os.getenv("CLAUDE_TRACKER_MSSQL_PORT", "1433")),
+            mssql_user=os.getenv("CLAUDE_TRACKER_MSSQL_USER", ""),
+            mssql_password=os.getenv("CLAUDE_TRACKER_MSSQL_PASSWORD", ""),
+            mssql_database=os.getenv("CLAUDE_TRACKER_MSSQL_DATABASE", "claude_tracker"),
             excel_path=os.getenv("CLAUDE_TRACKER_EXCEL_PATH", "claude_token_usage.xlsx"),
             pricing_url=os.getenv("CLAUDE_TRACKER_PRICING_URL", "https://raw.githubusercontent.com/prameshanu/claude-token-tracker/main/pricing.json"),
             pricing_cache_path=os.getenv("CLAUDE_TRACKER_PRICING_CACHE_PATH", "~/.claude_token_tracker/pricing_cache.json"),

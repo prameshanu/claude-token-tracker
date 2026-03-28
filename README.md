@@ -22,6 +22,9 @@ pip install claude-token-tracker
 # With MySQL support
 pip install claude-token-tracker[mysql]
 
+# With MSSQL / Azure SQL Edge support
+pip install claude-token-tracker[mssql]
+
 # With Excel support
 pip install claude-token-tracker[excel]
 
@@ -69,8 +72,9 @@ for row in conn.execute("SELECT model, SUM(input_tokens), SUM(output_tokens), SU
 | **JSON** | None | `pip install claude-token-tracker` | Simplest possible, human-readable logs |
 | **SQLite** (default) | None | `pip install claude-token-tracker` | Local development, queryable data |
 | **MySQL** | MySQL server | `pip install claude-token-tracker[mysql]` | Production, team dashboards |
+| **MSSQL** | MSSQL / Azure SQL Edge | `pip install claude-token-tracker[mssql]` | Enterprise, existing SQL Server infra |
 | **Excel** | None | `pip install claude-token-tracker[excel]` | Sharing reports, non-technical users |
-| **All** | MySQL server | `pip install claude-token-tracker[all]` | Logging to everything at once |
+| **All** | DB servers | `pip install claude-token-tracker[all]` | Logging to everything at once |
 
 ### Switch backends via environment variable
 
@@ -87,6 +91,14 @@ export CLAUDE_TRACKER_MYSQL_HOST=your-mysql-host
 export CLAUDE_TRACKER_MYSQL_USER=your_user
 export CLAUDE_TRACKER_MYSQL_PASSWORD=your_password
 export CLAUDE_TRACKER_MYSQL_DATABASE=claude_tracker
+
+# MSSQL / Azure SQL Edge
+export CLAUDE_TRACKER_STORAGE=mssql
+export CLAUDE_TRACKER_MSSQL_HOST=your-mssql-host
+export CLAUDE_TRACKER_MSSQL_PORT=1433
+export CLAUDE_TRACKER_MSSQL_USER=sa
+export CLAUDE_TRACKER_MSSQL_PASSWORD=your_password
+export CLAUDE_TRACKER_MSSQL_DATABASE=claude_tracker
 
 # Excel only
 export CLAUDE_TRACKER_STORAGE=excel
@@ -142,7 +154,7 @@ All settings can be configured via environment variables or by passing a `Tracke
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `CLAUDE_TRACKER_STORAGE` | `sqlite` | Backend: `json`, `sqlite`, `mysql`, `excel`, or `all` |
+| `CLAUDE_TRACKER_STORAGE` | `sqlite` | Backend: `json`, `sqlite`, `mysql`, `mssql`, `excel`, or `all` |
 | `CLAUDE_TRACKER_JSON_PATH` | `~/.claude_token_tracker/usage.jsonl` | JSON lines file path |
 | `CLAUDE_TRACKER_SQLITE_PATH` | `~/.claude_token_tracker/usage.db` | SQLite database file path |
 | `CLAUDE_TRACKER_MYSQL_HOST` | `localhost` | MySQL server host |
@@ -150,6 +162,11 @@ All settings can be configured via environment variables or by passing a `Tracke
 | `CLAUDE_TRACKER_MYSQL_USER` | `""` | MySQL username |
 | `CLAUDE_TRACKER_MYSQL_PASSWORD` | `""` | MySQL password |
 | `CLAUDE_TRACKER_MYSQL_DATABASE` | `claude_tracker` | MySQL database name |
+| `CLAUDE_TRACKER_MSSQL_HOST` | `localhost` | MSSQL server host |
+| `CLAUDE_TRACKER_MSSQL_PORT` | `1433` | MSSQL server port |
+| `CLAUDE_TRACKER_MSSQL_USER` | `""` | MSSQL username |
+| `CLAUDE_TRACKER_MSSQL_PASSWORD` | `""` | MSSQL password |
+| `CLAUDE_TRACKER_MSSQL_DATABASE` | `claude_tracker` | MSSQL database name |
 | `CLAUDE_TRACKER_EXCEL_PATH` | `claude_token_usage.xlsx` | Excel file path |
 | `CLAUDE_TRACKER_PRICING_URL` | GitHub raw URL | Remote pricing.json URL |
 | `CLAUDE_TRACKER_PRICING_REFRESH_DAYS` | `7` | Days between pricing refreshes |
