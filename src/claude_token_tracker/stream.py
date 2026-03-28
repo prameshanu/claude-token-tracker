@@ -48,17 +48,21 @@ class TrackedMessageStreamManager:
                 duration_ms = int((time.monotonic() - self._start_time) * 1000)
                 input_tokens = final.usage.input_tokens
                 output_tokens = final.usage.output_tokens
+                cache_read_tokens = getattr(final.usage, "cache_read_input_tokens", 0) or 0
+                cache_creation_tokens = getattr(final.usage, "cache_creation_input_tokens", 0) or 0
                 input_cost, output_cost = calculate_cost(
                     self._model, input_tokens, output_tokens,
-                    self._config.pricing_overrides,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
+                    overrides=self._config.pricing_overrides,
                 )
                 row = dict(
                     request_id=getattr(final, "id", None),
                     model=self._model,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
-                    cache_read_tokens=getattr(final.usage, "cache_read_input_tokens", 0) or 0,
-                    cache_creation_tokens=getattr(final.usage, "cache_creation_input_tokens", 0) or 0,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
                     input_cost=input_cost,
                     output_cost=output_cost,
                     task_label=self._task_label,
@@ -108,17 +112,21 @@ class TrackedAsyncMessageStreamManager:
                 duration_ms = int((time.monotonic() - self._start_time) * 1000)
                 input_tokens = final.usage.input_tokens
                 output_tokens = final.usage.output_tokens
+                cache_read_tokens = getattr(final.usage, "cache_read_input_tokens", 0) or 0
+                cache_creation_tokens = getattr(final.usage, "cache_creation_input_tokens", 0) or 0
                 input_cost, output_cost = calculate_cost(
                     self._model, input_tokens, output_tokens,
-                    self._config.pricing_overrides,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
+                    overrides=self._config.pricing_overrides,
                 )
                 row = dict(
                     request_id=getattr(final, "id", None),
                     model=self._model,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
-                    cache_read_tokens=getattr(final.usage, "cache_read_input_tokens", 0) or 0,
-                    cache_creation_tokens=getattr(final.usage, "cache_creation_input_tokens", 0) or 0,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
                     input_cost=input_cost,
                     output_cost=output_cost,
                     task_label=self._task_label,

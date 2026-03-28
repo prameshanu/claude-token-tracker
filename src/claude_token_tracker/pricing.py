@@ -22,17 +22,31 @@ logger = logging.getLogger("claude_token_tracker")
 # ── Hardcoded fallback (used when remote fetch fails and no cache exists) ──
 
 HARDCODED_PRICING: dict[str, dict[str, float]] = {
-    "claude-opus-4-20250514": {"input_per_mtok": 15.00, "output_per_mtok": 75.00},
-    "claude-opus-4-6-20250626": {"input_per_mtok": 15.00, "output_per_mtok": 75.00},
-    "claude-sonnet-4-20250514": {"input_per_mtok": 3.00, "output_per_mtok": 15.00},
-    "claude-sonnet-4-6-20250626": {"input_per_mtok": 3.00, "output_per_mtok": 15.00},
-    "claude-haiku-4-20250414": {"input_per_mtok": 0.80, "output_per_mtok": 4.00},
-    "claude-haiku-4-5-20251001": {"input_per_mtok": 1.00, "output_per_mtok": 5.00},
-    "claude-3-5-sonnet-20241022": {"input_per_mtok": 3.00, "output_per_mtok": 15.00},
-    "claude-3-5-haiku-20241022": {"input_per_mtok": 0.80, "output_per_mtok": 4.00},
-    "claude-3-opus-20240229": {"input_per_mtok": 15.00, "output_per_mtok": 75.00},
-    "claude-3-sonnet-20240229": {"input_per_mtok": 3.00, "output_per_mtok": 15.00},
-    "claude-3-haiku-20240307": {"input_per_mtok": 0.25, "output_per_mtok": 1.25},
+    # Opus 4.6
+    "claude-opus-4-6-20250626": {"input_per_mtok": 5.00, "output_per_mtok": 25.00, "cache_write_per_mtok": 6.25, "cache_read_per_mtok": 0.50},
+    # Sonnet 4.6
+    "claude-sonnet-4-6-20250626": {"input_per_mtok": 3.00, "output_per_mtok": 15.00, "cache_write_per_mtok": 3.75, "cache_read_per_mtok": 0.30},
+    # Haiku 4.5
+    "claude-haiku-4-5-20251001": {"input_per_mtok": 1.00, "output_per_mtok": 5.00, "cache_write_per_mtok": 1.25, "cache_read_per_mtok": 0.10},
+    # Sonnet 4.5
+    "claude-sonnet-4-5-20250514": {"input_per_mtok": 3.00, "output_per_mtok": 15.00, "cache_write_per_mtok": 3.75, "cache_read_per_mtok": 0.30},
+    # Opus 4.5
+    "claude-opus-4-5-20250514": {"input_per_mtok": 5.00, "output_per_mtok": 25.00, "cache_write_per_mtok": 6.25, "cache_read_per_mtok": 0.50},
+    # Opus 4.1
+    "claude-opus-4-1-20250414": {"input_per_mtok": 15.00, "output_per_mtok": 75.00, "cache_write_per_mtok": 18.75, "cache_read_per_mtok": 1.50},
+    # Sonnet 4
+    "claude-sonnet-4-20250514": {"input_per_mtok": 3.00, "output_per_mtok": 15.00, "cache_write_per_mtok": 3.75, "cache_read_per_mtok": 0.30},
+    # Opus 4
+    "claude-opus-4-20250514": {"input_per_mtok": 15.00, "output_per_mtok": 75.00, "cache_write_per_mtok": 18.75, "cache_read_per_mtok": 1.50},
+    # Haiku 4
+    "claude-haiku-4-20250414": {"input_per_mtok": 1.00, "output_per_mtok": 5.00, "cache_write_per_mtok": 1.25, "cache_read_per_mtok": 0.10},
+    # Claude 3.5 family
+    "claude-3-5-sonnet-20241022": {"input_per_mtok": 3.00, "output_per_mtok": 15.00, "cache_write_per_mtok": 3.75, "cache_read_per_mtok": 0.30},
+    "claude-3-5-haiku-20241022": {"input_per_mtok": 0.80, "output_per_mtok": 4.00, "cache_write_per_mtok": 1.00, "cache_read_per_mtok": 0.08},
+    # Claude 3 family
+    "claude-3-opus-20240229": {"input_per_mtok": 15.00, "output_per_mtok": 75.00, "cache_write_per_mtok": 18.75, "cache_read_per_mtok": 1.50},
+    "claude-3-sonnet-20240229": {"input_per_mtok": 3.00, "output_per_mtok": 15.00, "cache_write_per_mtok": 3.75, "cache_read_per_mtok": 0.30},
+    "claude-3-haiku-20240307": {"input_per_mtok": 0.25, "output_per_mtok": 1.25, "cache_write_per_mtok": 0.30, "cache_read_per_mtok": 0.03},
 }
 
 # Backward compat alias
@@ -360,10 +374,15 @@ def calculate_cost(
     model: str,
     input_tokens: int,
     output_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
     overrides: dict[str, dict[str, float]] | None = None,
     config: TrackerConfig | None = None,
 ) -> tuple[float, float]:
     """Calculate input and output cost in USD.
+
+    Input cost includes: regular input tokens + cache write + cache read.
+    Output cost is based on output tokens only.
 
     Priority: overrides > remote/cached pricing > hardcoded defaults.
     Returns (input_cost, output_cost). Returns (0.0, 0.0) for unknown models.
@@ -378,6 +397,14 @@ def calculate_cost(
     if not pricing:
         return 0.0, 0.0
 
+    # Regular input/output
     input_cost = (input_tokens / 1_000_000) * pricing["input_per_mtok"]
     output_cost = (output_tokens / 1_000_000) * pricing["output_per_mtok"]
+
+    # Prompt caching costs (added to input cost)
+    if cache_creation_tokens and "cache_write_per_mtok" in pricing:
+        input_cost += (cache_creation_tokens / 1_000_000) * pricing["cache_write_per_mtok"]
+    if cache_read_tokens and "cache_read_per_mtok" in pricing:
+        input_cost += (cache_read_tokens / 1_000_000) * pricing["cache_read_per_mtok"]
+
     return round(input_cost, 6), round(output_cost, 6)

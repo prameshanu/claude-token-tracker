@@ -205,7 +205,7 @@ Every API call logs:
 | `total_tokens` | Sum of input + output |
 | `cache_read_tokens` | Prompt caching: tokens read from cache |
 | `cache_creation_tokens` | Prompt caching: tokens written to cache |
-| `input_cost` | Input cost in USD |
+| `input_cost` | Input cost in USD (includes cache write/read costs) |
 | `output_cost` | Output cost in USD |
 | `total_cost` | Total cost in USD |
 | `task_label` | Custom label (e.g., "generate_post") |
@@ -261,15 +261,17 @@ config = TrackerConfig(
 
 ### Current pricing (USD per million tokens)
 
-| Model | Input | Output |
-|---|---|---|
-| claude-opus-4-20250514 | $15.00 | $75.00 |
-| claude-sonnet-4-20250514 | $3.00 | $15.00 |
-| claude-haiku-4-20250414 | $0.80 | $4.00 |
-| claude-haiku-4-5-20251001 | $1.00 | $5.00 |
-| claude-3-5-sonnet-20241022 | $3.00 | $15.00 |
-| claude-3-5-haiku-20241022 | $0.80 | $4.00 |
-| claude-3-opus-20240229 | $15.00 | $75.00 |
+| Model | Input | Output | Cache Write | Cache Read |
+|---|---|---|---|---|
+| Opus 4.6 | $5.00 | $25.00 | $6.25 | $0.50 |
+| Sonnet 4.6 | $3.00 | $15.00 | $3.75 | $0.30 |
+| Haiku 4.5 | $1.00 | $5.00 | $1.25 | $0.10 |
+| Sonnet 4.5 | $3.00 | $15.00 | $3.75 | $0.30 |
+| Opus 4.5 | $5.00 | $25.00 | $6.25 | $0.50 |
+| Opus 4.1 | $15.00 | $75.00 | $18.75 | $1.50 |
+| Sonnet 4 | $3.00 | $15.00 | $3.75 | $0.30 |
+| Opus 4 | $15.00 | $75.00 | $18.75 | $1.50 |
+| Haiku 3 | $0.25 | $1.25 | $0.30 | $0.03 |
 
 ## MySQL Setup
 

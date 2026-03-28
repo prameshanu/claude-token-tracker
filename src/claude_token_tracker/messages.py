@@ -29,16 +29,21 @@ def _build_row(
     """Extract a usage row dict from a Message response."""
     input_tokens = message.usage.input_tokens
     output_tokens = message.usage.output_tokens
+    cache_read_tokens = getattr(message.usage, "cache_read_input_tokens", 0) or 0
+    cache_creation_tokens = getattr(message.usage, "cache_creation_input_tokens", 0) or 0
     input_cost, output_cost = calculate_cost(
-        model, input_tokens, output_tokens, config.pricing_overrides
+        model, input_tokens, output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_creation_tokens=cache_creation_tokens,
+        overrides=config.pricing_overrides,
     )
     return dict(
         request_id=getattr(message, "id", None),
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        cache_read_tokens=getattr(message.usage, "cache_read_input_tokens", 0) or 0,
-        cache_creation_tokens=getattr(message.usage, "cache_creation_input_tokens", 0) or 0,
+        cache_read_tokens=cache_read_tokens,
+        cache_creation_tokens=cache_creation_tokens,
         input_cost=input_cost,
         output_cost=output_cost,
         task_label=task_label,
