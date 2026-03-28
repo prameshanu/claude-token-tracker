@@ -185,7 +185,7 @@ INSERT INTO claude_token_usage
      cache_read_tokens, cache_creation_tokens,
      input_cost, output_cost,
      task_label, project, method, duration_ms)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 
