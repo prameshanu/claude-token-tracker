@@ -2,8 +2,14 @@
 
 from claude_token_tracker.client import TrackedAnthropic, TrackedAsyncAnthropic
 from claude_token_tracker.config import TrackerConfig
-from claude_token_tracker.excel import export_from_mysql
 from claude_token_tracker.pricing import DEFAULT_PRICING, calculate_cost, get_pricing
+
+
+def export_from_mysql(config=None, output_path: str | None = None) -> str:
+    """Lazy import to avoid requiring openpyxl unless excel is actually used."""
+    from claude_token_tracker.excel import export_from_mysql as _export
+    return _export(config=config, output_path=output_path)
+
 
 __all__ = [
     "TrackedAnthropic",

@@ -75,25 +75,59 @@ def _send_alert_email(config: TrackerConfig, error_msg: str) -> None:
         logger.debug("Failed to send alert email", exc_info=True)
 
 
-def _send_new_model_alert(config: TrackerConfig, new_models: list[str]) -> None:
-    """Send email alert when new models are discovered without pricing."""
+def _send_new_model_alert(
+    config: TrackerConfig,
+    new_models: list[str],
+    scraped_hints: dict[str, dict[str, float]] | None = None,
+) -> None:
+    """Send email alert when new models are discovered.
+
+    Includes unverified scraped pricing hints so the user can quickly
+    verify and update pricing.json.
+    """
     if not config.alert_email or not config.smtp_user or not config.smtp_password:
         logger.debug("New model alert skipped — SMTP not configured")
         return
 
     try:
-        model_list = "\n".join(f"  - {m}" for m in new_models)
-        subject = "claude-token-tracker: New Claude models — scraping failed, pricing unknown"
+        scraped_hints = scraped_hints or {}
+
+        # Build model details
+        model_lines = []
+        for m in new_models:
+            if m in scraped_hints:
+                h = scraped_hints[m]
+                model_lines.append(
+                    f"  - {m}\n"
+                    f"    Scraped (UNVERIFIED): input=${h['input_per_mtok']}/MTok, "
+                    f"output=${h['output_per_mtok']}/MTok"
+                )
+            else:
+                model_lines.append(f"  - {m}\n    Scraping failed — no pricing found")
+        model_details = "\n".join(model_lines)
+
+        # Build ready-to-paste JSON snippet
+        json_snippet_entries = {}
+        for m in new_models:
+            if m in scraped_hints:
+                json_snippet_entries[m] = scraped_hints[m]
+            else:
+                json_snippet_entries[m] = {"input_per_mtok": 0.00, "output_per_mtok": 0.00}
+        json_snippet = json.dumps(json_snippet_entries, indent=4)
+
+        subject = "claude-token-tracker: New Claude models detected — pricing update needed"
         body = (
-            f"The following new Claude models were discovered via the Anthropic Models API.\n"
-            f"Scraping Anthropic's website for pricing was attempted but FAILED.\n\n"
-            f"Models without pricing:\n{model_list}\n\n"
-            f"These models will be tracked with $0.00 cost until pricing is added.\n\n"
-            f"Action required: Update pricing.json in the repository:\n"
-            f"  {config.pricing_url}\n\n"
-            f"Scraping was attempted on:\n"
-            f"  - https://docs.anthropic.com/en/docs/about-claude/models\n"
-            f"  - https://www.anthropic.com/pricing\n\n"
+            f"New Claude models were discovered via the Anthropic Models API.\n"
+            f"Scraping was attempted but results need manual verification.\n\n"
+            f"Models found:\n{model_details}\n\n"
+            f"---\n"
+            f"Ready-to-paste JSON for pricing.json (VERIFY BEFORE USING):\n\n"
+            f"{json_snippet}\n\n"
+            f"---\n"
+            f"Steps:\n"
+            f"1. Verify pricing at https://docs.anthropic.com/en/docs/about-claude/models\n"
+            f"2. Update pricing.json in the repo: {config.pricing_url}\n"
+            f"3. Commit & push — all users will pick it up within 7 days\n\n"
             f"Timestamp: {datetime.now(timezone.utc).isoformat()}"
         )
 
@@ -302,36 +336,20 @@ def get_pricing(config: TrackerConfig | None = None) -> dict[str, dict[str, floa
                 api_models = _discover_models_from_api(config.anthropic_api_key)
                 new_models = [m for m in api_models if m not in _pricing_cache]
                 if new_models:
-                    logger.info("New models discovered: %s — attempting to scrape pricing", new_models)
+                    logger.info("New models discovered: %s", new_models)
 
-                    # Step 1: Try scraping pricing from Anthropic's website
-                    scraped = _scrape_pricing_for_models(new_models)
+                    # Scrape as hints only — never auto-applied
+                    scraped_hints = _scrape_pricing_for_models(new_models)
+                    if scraped_hints:
+                        logger.info("Scraped hints (unverified): %s", scraped_hints)
 
-                    # Step 2: Only add models where scraping found real pricing
-                    for m in new_models:
-                        if m in scraped:
-                            _pricing_cache[m] = scraped[m]
-                            logger.info("Auto-scraped pricing for %s: %s", m, scraped[m])
-                        # Models without pricing are NOT added — they stay unknown
-
-                    # Step 3: Email only about models where scraping failed
-                    unpriced = [m for m in new_models if m not in scraped]
-                    if unpriced:
-                        logger.warning(
-                            "Could not scrape pricing for: %s — these models will not have cost tracking",
-                            unpriced,
-                        )
-                        threading.Thread(
-                            target=_send_new_model_alert,
-                            args=(config, unpriced),
-                            daemon=True,
-                        ).start()
-                    else:
-                        logger.info("All new model pricing scraped successfully — no email needed")
-
-                    # Update cache file if any new pricing was scraped
-                    if scraped:
-                        _write_cache(cache_path, _pricing_cache)
+                    # Email with scraped hints for manual verification
+                    logger.info("Sending email with new models + scraped hints for verification")
+                    threading.Thread(
+                        target=_send_new_model_alert,
+                        args=(config, new_models, scraped_hints),
+                        daemon=True,
+                    ).start()
             except Exception:
                 logger.debug("Model auto-discovery failed", exc_info=True)
 
