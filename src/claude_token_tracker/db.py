@@ -199,7 +199,8 @@ class _MSSQLBackend:
         self._init_lock = threading.Lock()
         self._initialized = False
 
-    def _get_conn(self):
+    def _ensure_table(self) -> None:
+        """Create table using autocommit — required for DDL in MSSQL."""
         import pymssql
         conn = pymssql.connect(
             server=self._config.mssql_host,
@@ -207,15 +208,28 @@ class _MSSQLBackend:
             user=self._config.mssql_user,
             password=self._config.mssql_password,
             database=self._config.mssql_database,
+            autocommit=True,
         )
+        try:
+            cursor = conn.cursor()
+            cursor.execute(MSSQL_CREATE)
+        finally:
+            conn.close()
+
+    def _get_conn(self):
+        import pymssql
         if self._config.auto_create_table and not self._initialized:
             with self._init_lock:
                 if not self._initialized:
-                    cursor = conn.cursor()
-                    cursor.execute(MSSQL_CREATE)
-                    conn.commit()
+                    self._ensure_table()
                     self._initialized = True
-        return conn
+        return pymssql.connect(
+            server=self._config.mssql_host,
+            port=self._config.mssql_port,
+            user=self._config.mssql_user,
+            password=self._config.mssql_password,
+            database=self._config.mssql_database,
+        )
 
     def insert(self, row: dict[str, Any]) -> None:
         values = tuple(row.get(c) for c in COLUMNS)
