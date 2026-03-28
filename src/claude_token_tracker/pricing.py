@@ -394,6 +394,16 @@ def calculate_cost(
         all_pricing = get_pricing(config)
         pricing = all_pricing.get(model)
 
+        # Fuzzy match: strip date suffix and find a matching base model
+        # e.g. "claude-sonnet-4-5-20250929" → match "claude-sonnet-4-5-20250514"
+        if not pricing:
+            base = re.sub(r"-\d{8}$", "", model)
+            for known_model, known_pricing in all_pricing.items():
+                if re.sub(r"-\d{8}$", "", known_model) == base:
+                    pricing = known_pricing
+                    logger.debug("Fuzzy matched %s → %s", model, known_model)
+                    break
+
     if not pricing:
         return 0.0, 0.0
 
