@@ -16,7 +16,7 @@ Automatic token usage and cost tracking for the Anthropic Claude API. Drop-in re
 ## Installation
 
 ```bash
-# Basic install (SQLite backend — no extra dependencies)
+# Basic install — includes JSON + SQLite backends (no extra dependencies)
 pip install claude-token-tracker
 
 # With MySQL support
@@ -28,9 +28,11 @@ pip install claude-token-tracker[mssql]
 # With Excel support
 pip install claude-token-tracker[excel]
 
-# Everything
+# Everything (all backends)
 pip install claude-token-tracker[all]
 ```
+
+> **Note:** JSON and SQLite backends work with the basic install — no extras needed. MySQL, MSSQL, and Excel require their respective extras.
 
 Or install from source:
 
